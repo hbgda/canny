@@ -20,7 +20,7 @@ pub mod pattern {
                     Ok(match c { 
                         "??" => Part::Skip, 
                         _ => {
-                            if c.len() > 2 || !c.bytes().all(|b| b.is_ascii_alphanumeric()) {
+                            if c.len() != 2 || !c.bytes().all(|b| b.is_ascii_alphanumeric()) {
                                 return Err(format!("Invalid pattern part: {c}"));
                             }
                             let mut bytes = c.bytes()
@@ -60,13 +60,20 @@ pub struct Scanner<T: ByteStream> {
 }
 
 impl<T: ByteStream + Debug> Scanner<T> {
-    pub fn new(bytes: T, pattern: pattern::Pattern) -> Scanner<T> {
+    pub fn scan(bytes: T, pattern: pattern::Pattern) -> Scanner<T> {
         Scanner {
             bytes_len: bytes.clone().count(),
             bytes,
             pattern,
             idx: 0
         }
+    }
+}
+
+impl Scanner<ScanPtr> {
+    /// Convenience function for `Scanner::scan(ScanPtr::from(ptr), / ... /)`
+    pub fn scan_ptr(ptr: *const u8, len: usize, pattern: pattern::Pattern) -> Scanner<ScanPtr> {
+        Scanner::scan(ScanPtr { ptr, offset: 0, len }, pattern)
     }
 }
 
@@ -86,6 +93,28 @@ impl<T: ByteStream> Iterator for Scanner<T> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ScanPtr {
+    ptr: *const u8,
+    offset: usize,
+    len: usize
+}
+
+impl Iterator for ScanPtr {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.offset >= self.len {
+            return None;
+        }
+        unsafe {
+            let val = Some(self.ptr.add(self.offset).read());
+            self.offset += 1;
+            val
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod test {
     use crate::{Scanner, pattern::{Pattern, Part}};
@@ -93,7 +122,7 @@ pub mod test {
     #[test]
     fn scan() {
         let bytes = vec![0x3, 0x12, 0x58, 0xFF, 0x0, 0x1, 0x2, 0x3];
-        let mut scanner = Scanner::new(bytes.into_iter(), Pattern::new("FF ?? 01").unwrap());
+        let mut scanner = Scanner::scan(bytes.into_iter(), Pattern::new("FF ?? 01").unwrap());
         let found = scanner.next();
         assert_eq!(Some(3), found);
     }
@@ -102,5 +131,13 @@ pub mod test {
     fn pattern_new() {
         let pattern = Pattern::new("?? 02 A1 9B FF");
         assert_eq!(Ok(Pattern(vec![Part::Skip, Part::Byte(0x02), Part::Byte(0xA1), Part::Byte(0x9B), Part::Byte(0xFF)])), pattern)
+    }
+
+    #[test]
+    fn scan_ptr() {
+        let bytes: [u8; 5] = [0x4, 0x2, 0x0, 0x6, 0x9];
+        let ptr = &bytes[0] as *const u8;
+        let mut scanner = Scanner::scan_ptr(ptr, 5, Pattern::new("04 ?? 00 ?? 09").unwrap());
+        assert_eq!(Some(0), scanner.next())
     }
 }
