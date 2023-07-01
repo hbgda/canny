@@ -71,7 +71,7 @@ impl<T: ByteStream + Debug> Scanner<T> {
 }
 
 impl Scanner<ScanPtr> {
-    /// Convenience function for `Scanner::scan(ScanPtr::from(ptr), / ... /)`
+    /// Convenience function for `Scanner::scan(ScanPtr { ptr, offset, len }, / ... /)`
     pub fn scan_ptr(ptr: *const u8, len: usize, pattern: pattern::Pattern) -> Scanner<ScanPtr> {
         Scanner::scan(ScanPtr { ptr, offset: 0, len }, pattern)
     }
