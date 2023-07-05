@@ -1,3 +1,6 @@
+// #[cfg(feature = "mem")]
+pub mod mem;
+
 use std::fmt::Debug;
 
 pub mod pattern {
@@ -139,5 +142,12 @@ pub mod test {
         let ptr = &bytes[0] as *const u8;
         let mut scanner = Scanner::scan_ptr(ptr, 5, Pattern::new("04 ?? 00 ?? 09").unwrap());
         assert_eq!(Some(0), scanner.next())
+    }
+
+    #[test]
+    fn mem_windows() {
+        unsafe {
+            let process_mem = crate::read_process!("Steam");
+        }
     }
 }
