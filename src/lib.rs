@@ -3,6 +3,9 @@ pub mod mem;
 
 use std::fmt::Debug;
 
+#[cfg(windows)]
+pub use windows::s;
+
 pub mod pattern {
     use std::ops::Deref;
 
@@ -51,13 +54,12 @@ pub mod pattern {
     }
 }
 
-pub trait ByteStream: Iterator<Item = u8> + Clone {}
-impl<T: Iterator<Item = u8> + Clone> ByteStream for T {}
+pub trait ByteStream: Iterator<Item = u8> { }
+impl<T: Iterator<Item = u8>> ByteStream for T { }
 
 #[derive(Debug)]
 pub struct Scanner<T: ByteStream> {
     bytes: T,
-    bytes_len: usize,
     pattern: pattern::Pattern,
     idx: usize
 }
@@ -65,7 +67,6 @@ pub struct Scanner<T: ByteStream> {
 impl<T: ByteStream + Debug> Scanner<T> {
     pub fn scan(bytes: T, pattern: pattern::Pattern) -> Scanner<T> {
         Scanner {
-            bytes_len: bytes.clone().count(),
             bytes,
             pattern,
             idx: 0
@@ -84,9 +85,6 @@ impl<T: ByteStream> Iterator for Scanner<T> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.idx > self.bytes_len - self.pattern.len() {
-            return None;
-        }
         for part in self.pattern.iter() {
             let pattern::Part::Byte(pattern_byte) = *part else { self.bytes.next(); continue };
             if self.bytes.next()? != pattern_byte { self.idx += 1; return self.next(); }
@@ -120,7 +118,7 @@ impl Iterator for ScanPtr {
 
 #[cfg(test)]
 pub mod test {
-    use crate::{Scanner, pattern::{Pattern, Part}};
+    use crate::{Scanner, pattern::{Pattern, Part}, mem::windows::ProcessReader};
 
     #[test]
     fn scan() {
@@ -142,12 +140,5 @@ pub mod test {
         let ptr = &bytes[0] as *const u8;
         let mut scanner = Scanner::scan_ptr(ptr, 5, Pattern::new("04 ?? 00 ?? 09").unwrap());
         assert_eq!(Some(0), scanner.next())
-    }
-
-    #[test]
-    fn mem_windows() {
-        unsafe {
-            let process_mem = crate::read_process!("Steam");
-        }
     }
 }
