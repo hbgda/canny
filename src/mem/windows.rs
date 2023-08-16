@@ -2,6 +2,32 @@ use std::{error::Error, ffi::c_void};
 
 use windows::Win32::{System::{LibraryLoader::{GetModuleHandleW, GetModuleHandleA}, ProcessStatus::{GetModuleInformation, MODULEINFO}, Threading::GetCurrentProcess, Memory::{MEMORY_BASIC_INFORMATION, VirtualQuery, MEM_COMMIT, PAGE_READWRITE}}, Foundation::HMODULE};
 
+use crate::pattern;
+
+pub struct ProcessScanner {
+    reader: ProcessReader,
+    pattern: pattern::Pattern
+}
+
+impl ProcessScanner {
+    pub fn scan(reader: ProcessReader, pattern: pattern::Pattern) -> ProcessScanner {
+        ProcessScanner { reader, pattern }
+    }
+}
+
+impl Iterator for ProcessScanner {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for part in self.pattern.iter() {
+            let pattern::Part::Byte(pattern_byte) = *part else { self.reader.next(); continue };
+            if self.reader.next()? != pattern_byte { return self.next(); }
+        }
+
+        Some(self.reader.mem_base + self.reader.offset)
+    }
+}
+
 #[derive(Debug)]
 pub struct ProcessReader {
     mem_base: usize,
