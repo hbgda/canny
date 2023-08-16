@@ -57,6 +57,9 @@ impl ProcessReader {
 impl Iterator for ProcessReader {
     type Item = u8;
     fn next(&mut self) -> Option<Self::Item> {
+        if self.offset >= self.mem_size {
+            return None;
+        }
         let mut mbi = MEMORY_BASIC_INFORMATION::default();
         unsafe {
             VirtualQuery(Some((self.mem_base + self.offset) as *const c_void), &mut mbi, std::mem::size_of::<MEMORY_BASIC_INFORMATION>());
