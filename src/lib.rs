@@ -9,13 +9,13 @@ pub use windows::s;
 pub mod pattern {
     use std::ops::Deref;
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     pub enum Part {
         Byte(u8),
         Skip
     }
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     pub struct Pattern(pub(crate) Vec<Part>);
 
     impl Pattern {
@@ -118,7 +118,7 @@ impl Iterator for ScanPtr {
 
 #[cfg(test)]
 pub mod test {
-    use crate::{Scanner, pattern::{Pattern, Part}, mem::windows::ProcessReader};
+    use crate::{Scanner, pattern::{Pattern, Part}};
 
     #[test]
     fn scan() {
