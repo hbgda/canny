@@ -7,7 +7,7 @@ use std::fmt::Debug;
 pub use windows::s;
 
 pub mod pattern {
-    use std::ops::Deref;
+    use std::{ops::Deref, error::Error};
 
     #[derive(Debug, PartialEq, Clone)]
     pub enum Part {
@@ -19,25 +19,26 @@ pub mod pattern {
     pub struct Pattern(pub(crate) Vec<Part>);
 
     impl Pattern {
-        pub fn new(pattern: &str) -> Result<Pattern, String> {
-            let parts: Result<Vec<Part>, String> = pattern.to_ascii_uppercase()
+        pub fn new(pattern: &str) -> Result<Pattern, Box<dyn Error>> {
+            let parts: Result<Vec<Part>, Box<dyn Error>> = pattern.to_ascii_uppercase()
                 .split(" ")
                 .map(|c| 
                     Ok(match c { 
-                        "??" => Part::Skip, 
-                        _ => {
-                            if c.len() != 2 || !c.bytes().all(|b| b.is_ascii_alphanumeric()) {
-                                return Err(format!("Invalid pattern part: {c}"));
-                            }
-                            let mut bytes = c.bytes()
-                                .map(|mut f| { if f.is_ascii_alphabetic() { f -= 7 } f - 48 })
-                                .collect::<Vec<_>>();
+                        "??" => Part::Skip,
+                        _ => Part::Byte(u8::from_str_radix(c, 16)?)
+                        // _ => {
+                        //     if c.len() != 2 || !c.bytes().all(|b| b.is_ascii_alphanumeric()) {
+                        //         return Err(format!("Invalid pattern part: {c}"));
+                        //     }
+                        //     let mut bytes = c.bytes()
+                        //         .map(|mut f| { if f.is_ascii_alphabetic() { f -= 7 } f - 48 })
+                        //         .collect::<Vec<_>>();
 
-                            bytes[0] *= 16;
-                            Part::Byte(
-                                bytes.iter().sum()
-                            )
-                        }
+                        //     bytes[0] *= 16;
+                        //     Part::Byte(
+                        //         bytes.iter().sum()
+                        //     )
+                        // }
                     })
                 )
                 .collect();
@@ -131,7 +132,7 @@ pub mod test {
     #[test]
     fn pattern_new() {
         let pattern = Pattern::new("?? 02 A1 9B FF");
-        assert_eq!(Ok(Pattern(vec![Part::Skip, Part::Byte(0x02), Part::Byte(0xA1), Part::Byte(0x9B), Part::Byte(0xFF)])), pattern)
+        assert_eq!(Pattern(vec![Part::Skip, Part::Byte(0x02), Part::Byte(0xA1), Part::Byte(0x9B), Part::Byte(0xFF)]), pattern.unwrap())
     }
 
     #[test]
