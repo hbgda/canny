@@ -12,6 +12,7 @@ pub mod pattern {
     #[derive(Debug, PartialEq, Clone)]
     pub enum Part {
         Byte(u8),
+        Take,
         Skip
     }
 
@@ -25,6 +26,7 @@ pub mod pattern {
                 .map(|c| 
                     Ok(match c { 
                         "??" => Part::Skip,
+                        "**" => Part::Take,
                         _ => Part::Byte(u8::from_str_radix(c, 16)?)
                         // _ => {
                         //     if c.len() != 2 || !c.bytes().all(|b| b.is_ascii_alphanumeric()) {
@@ -62,7 +64,8 @@ impl<T: Iterator<Item = u8>> ByteStream for T { }
 pub struct Scanner<T: ByteStream> {
     bytes: T,
     pattern: pattern::Pattern,
-    idx: usize
+    idx: usize,
+    pub store: Vec<u8>
 }
 
 impl<T: ByteStream + Debug> Scanner<T> {
@@ -70,7 +73,8 @@ impl<T: ByteStream + Debug> Scanner<T> {
         Scanner {
             bytes,
             pattern,
-            idx: 0
+            idx: 0,
+            store: Vec::new()
         }
     }
 }
@@ -86,11 +90,27 @@ impl<T: ByteStream> Iterator for Scanner<T> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let mut store = Vec::new();
         for part in self.pattern.iter() {
-            let pattern::Part::Byte(pattern_byte) = *part else { self.bytes.next(); continue };
-            if self.bytes.next()? != pattern_byte { self.idx += 1; return self.next(); }
+            let source_byte = self.bytes.next()?;
+            match *part {
+                pattern::Part::Byte(byte) => {
+                    if source_byte != byte {
+                        self.idx += 1;
+                        return self.next()
+                    }
+                },
+                pattern::Part::Take => {
+                    store.push(source_byte);
+                },
+                pattern::Part::Skip => {
+                    continue
+                },
+            }
+            // let pattern::Part::Byte(pattern_byte) = *part else { self.bytes.next(); continue };
+            // if self.bytes.next()? != pattern_byte { self.idx += 1; return self.next(); }
         }
-
+        self.store = store;
         Some(self.idx)
     }
 }
@@ -141,5 +161,14 @@ pub mod test {
         let ptr = &bytes[0] as *const u8;
         let mut scanner = Scanner::scan_ptr(ptr, 5, Pattern::new("04 ?? 00 ?? 09").unwrap());
         assert_eq!(Some(0), scanner.next())
+    }
+
+    #[test]
+    fn take() {
+        let bytes: [u8; 5] = [0x4, 0x2, 0x9, 0x1, 0x8];
+        let mut scanner = Scanner::scan(bytes.into_iter(), Pattern::new("04 ** 09 ?? **").unwrap());
+        let found = scanner.next();
+        assert_eq!(Some(0), found);
+        assert_eq!(scanner.store, vec![0x2, 0x8]);
     }
 }

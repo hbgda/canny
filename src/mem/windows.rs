@@ -6,12 +6,13 @@ use crate::pattern::{self, Part};
 
 pub struct ProcessScanner {
     process: ProcessInfo,
-    pattern: pattern::Pattern
+    pattern: pattern::Pattern,
+    pub store: Vec<u8>
 }
 
 impl ProcessScanner {
     pub fn scan(process: ProcessInfo, pattern: pattern::Pattern) -> ProcessScanner {
-        ProcessScanner { process, pattern }
+        ProcessScanner { process, pattern, store: Vec::new() }
     }
 }
 
@@ -21,16 +22,32 @@ impl Iterator for ProcessScanner {
     fn next(&mut self) -> Option<Self::Item> {
         let mut offset: usize = 0;
         'mem_loop: while offset < self.process.mem_size {
+            let mut store = Vec::new();
             let mut pattern_offset = 0usize;
             unsafe {
                 for part in self.pattern.iter() {
-                    let Part::Byte(byte) = *part else { pattern_offset += 1; continue; };
-                    if std::ptr::read((self.process.mem_base + offset + pattern_offset) as *const u8) != byte { offset += 1; continue 'mem_loop; };
+                    let source_byte = std::ptr::read((self.process.mem_base + offset + pattern_offset) as *const u8);
+                    match *part {
+                        Part::Byte(byte) => {
+                            if source_byte != byte {
+                                offset += 1;
+                                continue 'mem_loop;
+                            }
+                        },
+                        Part::Take => {
+                            store.push(source_byte);
+                        },
+                        Part::Skip => {},
+                    }
                     pattern_offset += 1;
+                    // let Part::Byte(byte) = *part else { pattern_offset += 1; continue; };
+                    // if std::ptr::read((self.process.mem_base + offset + pattern_offset) as *const u8) != byte { offset += 1; continue 'mem_loop; };
+                    // pattern_offset += 1;
                     // println!("{offset:#X}/{:#X} Found part: {part:#X?}", self.process.mem_size);
                     // println!("Next byte: {:#X}", std::ptr::read((self.process.mem_base + offset + pattern_offset + 1) as *const u8));
                 }
             }
+            self.store = store;
             return Some(self.process.mem_base + offset);
         }
         None
